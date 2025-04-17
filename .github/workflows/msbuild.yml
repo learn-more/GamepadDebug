@@ -1,0 +1,37 @@
+name: Build
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+
+jobs:
+  build_and_test:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration: [Release, Debug]
+        toolset: [vs2022]
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Add MSBuild to PATH
+      uses: microsoft/setup-msbuild@v1.0.2
+
+    - name: Add premake5 to path
+      shell: bash
+      run: echo "${{github.workspace}}/vendor/premake5" >> $GITHUB_PATH
+
+    - name: Create Project files
+      working-directory: ${{github.workspace}}
+      run: premake5 ${{matrix.toolset}}
+
+    - name: Build
+      working-directory: ${{github.workspace}}
+      run: premake5 build --platform=All --configuration=${{matrix.configuration}}
