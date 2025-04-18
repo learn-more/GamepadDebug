@@ -3,12 +3,24 @@
 
 using std::string;
 
+struct DPad
+{
+    uint8_t Up : 1;
+    uint8_t Down : 1;
+    uint8_t Left : 1;
+    uint8_t Right : 1;
+
+    void clear()
+    {
+        Up = 0;
+        Down = 0;
+        Left = 0;
+        Right = 0;
+    }
+};
+
 struct GamePadButtons
 {
-    uint16_t DPadUp : 1;
-    uint16_t DPadDown : 1;
-    uint16_t DPadLeft : 1;
-    uint16_t DPadRight : 1;
     uint16_t Start : 1;
     uint16_t Back : 1;
     uint16_t LeftThumb : 1;
@@ -20,6 +32,7 @@ struct GamePadButtons
     uint16_t X : 1;
     uint16_t Y : 1;
     uint16_t Guide : 1;
+    DPad DPad;
 
     GamePadButtons()
     {
@@ -28,10 +41,7 @@ struct GamePadButtons
 
     void clear()
     {
-        DPadUp = 0;
-        DPadDown = 0;
-        DPadLeft = 0;
-        DPadRight = 0;
+        DPad.clear();
         Start = 0;
         Back = 0;
         LeftThumb = 0;

@@ -75,10 +75,10 @@ void XInput_Update()
                 {
                     s_XInputDevices[i].session = state.dwPacketNumber;
                     auto& btn = s_XInputDevices[i].buttons;
-                    btn.DPadUp = (state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_UP) != 0;
-                    btn.DPadDown = (state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_DOWN) != 0;
-                    btn.DPadLeft = (state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_LEFT) != 0;
-                    btn.DPadRight = (state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_RIGHT) != 0;
+                    btn.DPad.Up = (state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_UP) != 0;
+                    btn.DPad.Down = (state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_DOWN) != 0;
+                    btn.DPad.Left = (state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_LEFT) != 0;
+                    btn.DPad.Right = (state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_RIGHT) != 0;
                     btn.Start = (state.Gamepad.wButtons & XINPUT_GAMEPAD_START) != 0;
                     btn.Back = (state.Gamepad.wButtons & XINPUT_GAMEPAD_BACK) != 0;
                     btn.LeftThumb = (state.Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_THUMB) != 0;

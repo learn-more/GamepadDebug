@@ -4,10 +4,11 @@
 #include "gd_types.h"
 #include "modules/Notifications.h"
 #include "modules/gd_XInput.h"
-#include "fonts/promptfont.h"
+#include "fonts/sourcecodepro.h"
+#include "fonts/cf_xbox_one.h"
 
 
-void append_text_comma_if(bool show, std::string& output, const char* text)
+static void append_text_comma_if(bool show, std::string& output, const char* text)
 {
     if (show)
     {
@@ -17,12 +18,46 @@ void append_text_comma_if(bool show, std::string& output, const char* text)
     }
 }
 
-void append_text_if(bool show, std::string& output, const char* text)
+static void append_text_if(bool show, std::string& output, const char* text)
 {
     if (show)
     {
         output += text;
     }
+}
+
+static void append_dpad(std::string& text, DPad dpad)
+{
+    // First check for combinations that we can handle
+    if (dpad.Left && dpad.Up)
+    {
+        text += CF_XBOX_DPAD_UP_LEFT;
+        dpad.Left = 0;
+        dpad.Up = 0;
+    }
+    if (dpad.Left && dpad.Down)
+    {
+        text += CF_XBOX_DPAD_DOWN_LEFT;
+        dpad.Left = 0;
+        dpad.Down = 0;
+    }
+    if (dpad.Right && dpad.Up)
+    {
+        text += CF_XBOX_DPAD_UP_RIGHT;
+        dpad.Right = 0;
+        dpad.Up = 0;
+    }
+    if (dpad.Right && dpad.Down)
+    {
+        text += CF_XBOX_DPAD_DOWN_RIGHT;
+        dpad.Right = 0;
+        dpad.Down = 0;
+    }
+    // Now handle each direction individually
+    append_text_if(dpad.Up, text, CF_XBOX_DPAD_UP);
+    append_text_if(dpad.Down, text, CF_XBOX_DPAD_DOWN);
+    append_text_if(dpad.Left, text, CF_XBOX_DPAD_LEFT);
+    append_text_if(dpad.Right, text, CF_XBOX_DPAD_RIGHT);
 }
 
 static void XInput_RenderFrame()
@@ -70,21 +105,18 @@ static void XInput_RenderFrame()
                     ImGuiIO& io = ImGui::GetIO();
                     ImGui::PushFont(io.Fonts->Fonts[1]);
                     std::string text;
-                    append_text_if(device.buttons.DPadUp, text, PF_XBOX_DPAD_UP);
-                    append_text_if(device.buttons.DPadDown, text, PF_XBOX_DPAD_DOWN);
-                    append_text_if(device.buttons.DPadLeft, text, PF_XBOX_DPAD_LEFT);
-                    append_text_if(device.buttons.DPadRight, text, PF_XBOX_DPAD_RIGHT);
-                    append_text_if(device.buttons.Start, text, PF_XBOX_MENU);
-                    append_text_if(device.buttons.Back, text, PF_XBOX_VIEW);
-                    append_text_if(device.buttons.LeftThumb, text, PF_ANALOG_L);
-                    append_text_if(device.buttons.RightThumb, text, PF_ANALOG_R);
-                    append_text_if(device.buttons.LeftShoulder, text, PF_XBOX_LEFT_SHOULDER);
-                    append_text_if(device.buttons.RightShoulder, text, PF_XBOX_RIGHT_SHOULDER);
-                    append_text_if(device.buttons.A, text, PF_XBOX_A);
-                    append_text_if(device.buttons.B, text, PF_XBOX_B);
-                    append_text_if(device.buttons.X, text, PF_XBOX_X);
-                    append_text_if(device.buttons.Y, text, PF_XBOX_Y);
-                    append_text_if(device.buttons.Guide, text, PF_ICON_XBOX);
+                    append_dpad(text, device.buttons.DPad);
+                    append_text_if(device.buttons.Start, text, CF_XBOX_MENU);
+                    append_text_if(device.buttons.Back, text, CF_XBOX_VIEW);
+                    append_text_if(device.buttons.LeftThumb, text, CF_ANALOG_L);
+                    append_text_if(device.buttons.RightThumb, text, CF_ANALOG_R);
+                    append_text_if(device.buttons.LeftShoulder, text, CF_XBOX_LEFT_SHOULDER);
+                    append_text_if(device.buttons.RightShoulder, text, CF_XBOX_RIGHT_SHOULDER);
+                    append_text_if(device.buttons.A, text, CF_XBOX_A);
+                    append_text_if(device.buttons.B, text, CF_XBOX_B);
+                    append_text_if(device.buttons.X, text, CF_XBOX_X);
+                    append_text_if(device.buttons.Y, text, CF_XBOX_Y);
+                    append_text_if(device.buttons.Guide, text, CF_ICON_XBOX);
                     ImGui::TextWrapped(text.c_str());
                     ImGui::PopFont();
                 }
@@ -158,7 +190,9 @@ void GD_Init()
     Notifications_Init();
     XInput_Init();
     ImGuiIO& io = ImGui::GetIO();
-    PF_BuildAtlas(io.Fonts, false);
+    //io.Fonts->AddFontDefault();
+    SC_AddFont(io.Fonts);
+    CF_AddFont(io.Fonts);
     //DInput_Init();
 }
 

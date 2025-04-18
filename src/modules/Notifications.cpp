@@ -4,7 +4,6 @@
 #define INITGUID
 #include <Hidclass.h>
 #include "modules/Notifications.h"
-//#pragma comment(lib, "Cfgmgr32.lib")
 
 static HCMNOTIFICATION s_NotifyContext;
 static ULONG s_DeviceNotification = 0;

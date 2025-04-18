@@ -15,7 +15,7 @@ void GD_Log(const char* fmt, ...)
 
     unique_lock<mutex> lock(s_Mutex);
 
-    s_Buf.appendf("[%7.1f] ", ImGui::GetTime());
+    s_Buf.appendf("%7.1f | ", ImGui::GetTime());
 
     va_list args;
     va_start(args, fmt);
