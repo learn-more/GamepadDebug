@@ -10,7 +10,7 @@
 #include "imgui_impl_dx9.h"
 #include "imgui_impl_win32.h"
 #include <d3d9.h>
-#include <tchar.h>
+#include "gd_main.h"
 
 // Data
 static LPDIRECT3D9              g_pD3D = nullptr;
@@ -49,8 +49,7 @@ static void DrawFrame()
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
 
-    void GamepadDebugFrame();
-    GamepadDebugFrame();
+    GD_Frame();
 
     // Rendering
     ImGui::EndFrame();
@@ -114,6 +113,8 @@ int APIENTRY WinMain(_In_ HINSTANCE hInstance,
     ImGui_ImplWin32_Init(hwnd);
     ImGui_ImplDX9_Init(g_pd3dDevice);
 
+    GD_Init();
+
     // Load Fonts
     // - If no fonts are loaded, dear imgui will use the default font. You can also load multiple fonts and use ImGui::PushFont()/PopFont() to select them.
     // - AddFontFromFileTTF() will return the ImFont* so you can store it if you need to select the font among multiple.
@@ -149,6 +150,8 @@ int APIENTRY WinMain(_In_ HINSTANCE hInstance,
 
         DrawFrame();
     }
+
+    GD_Shutdown();
 
     // Cleanup
     ImGui_ImplDX9_Shutdown();
