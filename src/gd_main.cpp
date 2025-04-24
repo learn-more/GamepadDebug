@@ -116,17 +116,26 @@ static void XInput_RenderFrame()
                 ImGui::Text("XUser %d", i);
                 ImGui::TableNextColumn();
                 ImGui::Text(device.connected ? device.type.c_str() : "Disconnected");
-                ImGui::TableNextColumn();
 
-                ImGui::Text("Features");
-                ImGui::TableNextColumn();
+                if (device.connected && device.features.any())
                 {
-                    std::string text;
-                    append_text_comma_if(device.features.voice, text, "Voice");
-                    append_text_comma_if(device.features.forceFeedback, text, "Force Feedback");
-                    append_text_comma_if(device.features.wireless, text, "Wireless");
-                    append_text_comma_if(device.features.noNavigation, text, "No Navigation");
-                    ImGui::TextWrapped(text.c_str());
+                    ImGui::SameLine();
+                    ImGui::TextDisabled("(f)");
+                    if (ImGui::BeginItemTooltip())
+                    {
+                        if (device.features.voice)
+                            ImGui::BulletText("Device has an integrated voice device.");
+                        if (device.features.forceFeedback)
+                            ImGui::BulletText("Device supports force feedback functionality.");
+                        if (device.features.wireless)
+                            ImGui::BulletText("Device is wireless.");
+                        if (device.features.noNavigation)
+                            ImGui::BulletText("Device lacks menu navigation buttons (START, BACK, DPAD).");
+                        if (device.features.plugInModules)
+                            ImGui::BulletText("Device supports plug-in modules.");
+                        ImGui::EndTooltip();
+                    }
+                }
 
                 auto& style = ImGui::GetStyle();
                 float pad_r = style.FramePadding.x;

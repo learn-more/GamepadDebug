@@ -128,6 +128,7 @@ void XInput_EnumerateDevices()
                 s_XInputDevices[i].features.forceFeedback = (capabilities.Flags & XINPUT_CAPS_FFB_SUPPORTED) != 0;
                 s_XInputDevices[i].features.wireless = (capabilities.Flags & XINPUT_CAPS_WIRELESS) != 0;
                 s_XInputDevices[i].features.noNavigation = (capabilities.Flags & XINPUT_CAPS_NO_NAVIGATION) != 0;
+                s_XInputDevices[i].features.plugInModules = (capabilities.Flags & XINPUT_CAPS_PMD_SUPPORTED) != 0;
             }
             else
             {

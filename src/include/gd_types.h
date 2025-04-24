@@ -62,10 +62,16 @@ struct GamePadFeatures
     uint8_t forceFeedback : 1;
     uint8_t wireless : 1;
     uint8_t noNavigation : 1;
+    uint8_t plugInModules : 1;
 
     GamePadFeatures()
     {
         clear();
+    }
+
+    bool any() const
+    {
+        return voice || forceFeedback || wireless || noNavigation || plugInModules;
     }
 
     void clear()
@@ -74,6 +80,7 @@ struct GamePadFeatures
         forceFeedback = 0;
         wireless = 0;
         noNavigation = 0;
+        plugInModules = 0;
     }
 };
 
