@@ -9,8 +9,14 @@
 #include "imgui.h"
 #include "imgui_impl_dx9.h"
 #include "imgui_impl_win32.h"
+#include "gd_win32.h"
 #include <d3d9.h>
 #include "gd_main.h"
+#include "gd_log.h"
+
+#ifndef DBT_DEVNODES_CHANGED
+#define DBT_DEVNODES_CHANGED 0x0007
+#endif
 
 // Data
 static LPDIRECT3D9              g_pD3D = nullptr;
@@ -242,6 +248,16 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
     case WM_EXITSIZEMOVE:
     case WM_CAPTURECHANGED:
         g_ResizingWindow = false;
+        break;
+    case WM_DEVICECHANGE:
+        if (wParam == DBT_DEVNODES_CHANGED)
+        {
+            GD_Log("WM_DEVICECHANGE: DBT_DEVNODES_CHANGED\n");
+        }
+        else
+        {
+            GD_Log("WM_DEVICECHANGE: %d\n", wParam);
+        }
         break;
     default:
         break;

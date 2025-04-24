@@ -27,16 +27,16 @@ static DWORD CALLBACK NotificationCallback(
         switch (EventData->FilterType)
         {
         case CM_NOTIFY_FILTER_TYPE_DEVICEINTERFACE:
-            GD_Log("Device interface %s: %S\n", ActionString, EventData->u.DeviceInterface.SymbolicLink);
+            GD_Log("[CM] Device interface %s: %S\n", ActionString, EventData->u.DeviceInterface.SymbolicLink);
             break;
         case CM_NOTIFY_FILTER_TYPE_DEVICEHANDLE:
-            GD_Log("Device handle %s\n");
+            GD_Log("[CM] Device handle %s\n");
             break;
         case CM_NOTIFY_FILTER_TYPE_DEVICEINSTANCE:
-            GD_Log("Device instance %s: %S\n", ActionString, EventData->u.DeviceInstance.InstanceId);
+            GD_Log("[CM] Device instance %s: %S\n", ActionString, EventData->u.DeviceInstance.InstanceId);
             break;
         default:
-            GD_Log("Unknown filter type %d %s\n", EventData->FilterType, ActionString);
+            GD_Log("[CM] Unknown filter type %d %s\n", EventData->FilterType, ActionString);
             break;
         }
     }
