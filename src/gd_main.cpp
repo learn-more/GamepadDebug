@@ -205,16 +205,13 @@ void GD_Frame()
 
 
 #if !defined(IMGUI_DISABLE_DEMO_WINDOWS)
-    static bool show_demo_window = true;
+    static bool show_demo_window = false;
+
+    if (ImGui::IsKeyPressed(ImGuiKey_F1))
+        show_demo_window = true;
 
     if (show_demo_window)
     {
-        static bool once = true;
-        if (once)
-        {
-            ImGui::SetNextWindowCollapsed(true, ImGuiCond_FirstUseEver);
-            once = false;
-        }
         ImGui::ShowDemoWindow(&show_demo_window);
     }
 #endif
