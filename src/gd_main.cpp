@@ -1,4 +1,5 @@
 #include "imgui.h"
+#include "imgui_internal.h"
 #include "gd_main.h"
 #include "gd_log.h"
 #include "gd_types.h"
@@ -60,6 +61,36 @@ static void append_dpad(std::string& text, DPad dpad)
     append_text_if(dpad.Right, text, CF_XBOX_DPAD_RIGHT);
 }
 
+static bool s_DontConfirmPoweroff = false;
+static bool ConfirmPoweroffModal()
+{
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+    bool confirmed = false;
+    if (ImGui::BeginPopupModal("Power off?", NULL, ImGuiWindowFlags_AlwaysAutoResize))
+    {
+        ImGui::Text("The controller will be powered off.\n\nNote: This does not work for every controller!");
+        ImGui::Separator();
+
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
+        ImGui::Checkbox("Don't ask me next time", &s_DontConfirmPoweroff);
+        ImGui::PopStyleVar();
+
+        if (ImGui::Button("OK", ImVec2(120, 0)))
+        {
+            ImGui::CloseCurrentPopup();
+            confirmed = true;
+        }
+        ImGui::SetItemDefaultFocus();
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", ImVec2(120, 0)))
+            ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+    }
+    return confirmed;
+}
+
 static void XInput_RenderFrame()
 {
     ImGui::Begin("XInput", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBringToFrontOnFocus);
@@ -96,7 +127,25 @@ static void XInput_RenderFrame()
                     append_text_comma_if(device.features.wireless, text, "Wireless");
                     append_text_comma_if(device.features.noNavigation, text, "No Navigation");
                     ImGui::TextWrapped(text.c_str());
+
+                auto& style = ImGui::GetStyle();
+                float pad_r = style.FramePadding.x;
+                float button_sz = ImGui::GetFontSize();
+
+                ImRect xr = ImGui::TableGetCellBgRect(ImGui::GetCurrentTable(), 1);
+
+                auto close_button_pos = ImVec2(xr.Max.x - pad_r - button_sz, xr.Min.y + style.FramePadding.y);
+                if (ImGui::CloseButton(ImGui::GetID("#DISCONNECT"), close_button_pos))
+                {
+                    if (s_DontConfirmPoweroff)
+                        XInput_Poweroff(i);
+                    else
+                        ImGui::OpenPopup("Power off?");
                 }
+
+                if (ConfirmPoweroffModal())
+                    XInput_Poweroff(i);
+
                 ImGui::TableNextColumn();
 
                 ImGui::Text("Buttons");

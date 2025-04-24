@@ -25,6 +25,7 @@ typedef struct _XINPUT_STATE_EX {
 constexpr auto XINPUT_GAMEPAD_GUIDE = 0x0400;
 
 typedef DWORD (WINAPI *tXInputGetStateEx)(_In_ DWORD dwUserIndex, XINPUT_STATE_EX* pState);
+typedef DWORD(WINAPI* tXInputPowerOffController)(DWORD XUser);
 
 
 static HINSTANCE s_XInputInstance = nullptr;
@@ -136,6 +137,40 @@ void XInput_EnumerateDevices()
         }
     }
 }
+
+void XInput_Poweroff(uint32_t XUser)
+{
+    tXInputPowerOffController XInputPowerOffController = (tXInputPowerOffController)GetProcAddress(s_XInputInstance, (LPCSTR)103);
+    if (!XInputPowerOffController)
+    {
+        GD_Log("Failed to get XInput PowerOff function\n");
+        return;
+    }
+
+    GD_Log("Powering off controller %d\n", XUser);
+    DWORD res = XInputPowerOffController(XUser);
+    if (res == ERROR_SUCCESS)
+    {
+        GD_Log("Powering off controller succeeded\n");
+    }
+    else
+    {
+        // Convert the winapi error code to a string
+        char errorMsg[256]{};
+        FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, nullptr, res,
+            MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), errorMsg, sizeof(errorMsg)-1, nullptr);
+
+        char* tmp = errorMsg + strlen(errorMsg) - 1;
+        while (tmp > errorMsg && *tmp == '\n')
+        {
+            *tmp = '\0';
+            --tmp;
+        }
+
+        GD_Log("Powering off controller failed: ERROR %d (%s)\n", res, errorMsg);
+    }
+}
+
 
 void XInput_Init()
 {
