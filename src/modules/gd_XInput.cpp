@@ -1,8 +1,11 @@
 #include "gd_win32.h"
 #include "gd_log.h"
-#include "gd_types.h"
+#include "fonts/cf_xbox_one.h"
 #include "modules/gd_XInput.h"
+#include "modules/gd_XInput_types.h"
 #include <Xinput.h>
+#include "imgui.h"
+#include "imgui_internal.h"
 
 // Private (semi-) undocumented XInput functions
 // We want these to read the state of the Guide button (Xbox button) on the controller
@@ -33,13 +36,9 @@ static tXInputGetStateEx s_XInputGetStateEx = nullptr;
 static decltype(XInputGetCapabilities)* s_XInputGetCapabilities = nullptr;
 
 
-static GamePadState s_XInputDevices[4]{};
+static GD::XInput::GamePadState s_XInputDevices[4]{};
 
-GamePadState* XInput_Devices()
-{
-    return s_XInputDevices;
-}
-
+static void XInput_Poweroff(DWORD XUser);
 
 static const string SubTypeToString(BYTE subtype)
 {
@@ -57,7 +56,193 @@ static const string SubTypeToString(BYTE subtype)
     }
 }
 
-void XInput_Update()
+static void append_text_comma_if(bool show, std::string& output, const char* text)
+{
+    if (show)
+    {
+        if (!output.empty())
+            output += ", ";
+        output += text;
+    }
+}
+
+static void append_text_if(bool show, std::string& output, const char* text)
+{
+    if (show)
+    {
+        output += text;
+    }
+}
+
+static void append_dpad(std::string& text, GD::XInput::DPad dpad)
+{
+    // First check for combinations that we can handle
+    if (dpad.Left && dpad.Up)
+    {
+        text += CF_XBOX_DPAD_UP_LEFT;
+        dpad.Left = 0;
+        dpad.Up = 0;
+    }
+    if (dpad.Left && dpad.Down)
+    {
+        text += CF_XBOX_DPAD_DOWN_LEFT;
+        dpad.Left = 0;
+        dpad.Down = 0;
+    }
+    if (dpad.Right && dpad.Up)
+    {
+        text += CF_XBOX_DPAD_UP_RIGHT;
+        dpad.Right = 0;
+        dpad.Up = 0;
+    }
+    if (dpad.Right && dpad.Down)
+    {
+        text += CF_XBOX_DPAD_DOWN_RIGHT;
+        dpad.Right = 0;
+        dpad.Down = 0;
+    }
+    // Now handle each direction individually
+    append_text_if(dpad.Up, text, CF_XBOX_DPAD_UP);
+    append_text_if(dpad.Down, text, CF_XBOX_DPAD_DOWN);
+    append_text_if(dpad.Left, text, CF_XBOX_DPAD_LEFT);
+    append_text_if(dpad.Right, text, CF_XBOX_DPAD_RIGHT);
+}
+
+static bool s_DontConfirmPoweroff = false;
+static bool ConfirmPoweroffModal()
+{
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+    bool confirmed = false;
+    if (ImGui::BeginPopupModal("Power off?", NULL, ImGuiWindowFlags_AlwaysAutoResize))
+    {
+        ImGui::Text("The controller will be powered off.\n\nNote: This does not work for every controller!");
+        ImGui::Separator();
+
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
+        ImGui::Checkbox("Don't ask me next time", &s_DontConfirmPoweroff);
+        ImGui::PopStyleVar();
+
+        if (ImGui::Button("OK", ImVec2(120, 0)))
+        {
+            ImGui::CloseCurrentPopup();
+            confirmed = true;
+        }
+        ImGui::SetItemDefaultFocus();
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", ImVec2(120, 0)))
+            ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+    }
+    return confirmed;
+}
+
+void GD::XInput::RenderFrame()
+{
+    ImGui::PushStyleColor(ImGuiCol_TitleBg, ImGui::GetStyleColorVec4(ImGuiCol_TitleBgActive));
+    ImGui::Begin("XInput devices", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBringToFrontOnFocus);
+    ImGui::PopStyleColor();
+
+    auto avail = ImGui::GetContentRegionAvail();
+    avail /= 2;
+    avail -= ImGui::GetStyle().FramePadding;
+
+    for (int i = 0; i < 4; i++)
+    {
+        ImGui::PushID(i);
+        auto& device = s_XInputDevices[i];
+
+        if (i % 2 != 0)
+            ImGui::SameLine();
+
+        ImGui::BeginDisabled(!device.connected);
+        if (ImGui::BeginChild("controller", avail, ImGuiChildFlags_FrameStyle, ImGuiWindowFlags_NoDecoration))
+        {
+            if (ImGui::BeginTable("table", 2, ImGuiTableFlags_BordersInner))
+            {
+                ImGui::TableSetupColumn("desc", ImGuiTableColumnFlags_WidthFixed);
+                ImGui::TableSetupColumn("value", ImGuiTableColumnFlags_WidthStretch);
+
+                ImGui::TableNextColumn();
+                ImGui::Text("XUser %d", i);
+                ImGui::TableNextColumn();
+                ImGui::Text(device.connected ? device.type.c_str() : "Disconnected");
+
+                if (device.connected && device.features.any())
+                {
+                    ImGui::SameLine();
+                    ImGui::TextDisabled("(f)");
+                    if (ImGui::BeginItemTooltip())
+                    {
+                        if (device.features.voice)
+                            ImGui::BulletText("Device has an integrated voice device.");
+                        if (device.features.forceFeedback)
+                            ImGui::BulletText("Device supports force feedback functionality.");
+                        if (device.features.wireless)
+                            ImGui::BulletText("Device is wireless.");
+                        if (device.features.noNavigation)
+                            ImGui::BulletText("Device lacks menu navigation buttons (START, BACK, DPAD).");
+                        if (device.features.plugInModules)
+                            ImGui::BulletText("Device supports plug-in modules.");
+                        ImGui::EndTooltip();
+                    }
+                }
+
+                auto& style = ImGui::GetStyle();
+                float pad_r = style.FramePadding.x;
+                float button_sz = ImGui::GetFontSize();
+
+                ImRect xr = ImGui::TableGetCellBgRect(ImGui::GetCurrentTable(), 1);
+
+                auto close_button_pos = ImVec2(xr.Max.x - pad_r - button_sz, xr.Min.y + style.FramePadding.y);
+                if (ImGui::CloseButton(ImGui::GetID("#DISCONNECT"), close_button_pos))
+                {
+                    if (s_DontConfirmPoweroff)
+                        XInput_Poweroff(i);
+                    else
+                        ImGui::OpenPopup("Power off?");
+                }
+
+                if (ConfirmPoweroffModal())
+                    XInput_Poweroff(i);
+
+                ImGui::TableNextColumn();
+
+                ImGui::Text("Buttons");
+                ImGui::TableNextColumn();
+                {
+                    ImGuiIO& io = ImGui::GetIO();
+                    ImGui::PushFont(io.Fonts->Fonts[1]);
+                    std::string text;
+                    append_dpad(text, device.buttons.DPad);
+                    append_text_if(device.buttons.Start, text, CF_XBOX_MENU);
+                    append_text_if(device.buttons.Back, text, CF_XBOX_VIEW);
+                    append_text_if(device.buttons.LeftThumb, text, CF_ANALOG_L);
+                    append_text_if(device.buttons.RightThumb, text, CF_ANALOG_R);
+                    append_text_if(device.buttons.LeftShoulder, text, CF_XBOX_LEFT_SHOULDER);
+                    append_text_if(device.buttons.RightShoulder, text, CF_XBOX_RIGHT_SHOULDER);
+                    append_text_if(device.buttons.A, text, CF_XBOX_A);
+                    append_text_if(device.buttons.B, text, CF_XBOX_B);
+                    append_text_if(device.buttons.X, text, CF_XBOX_X);
+                    append_text_if(device.buttons.Y, text, CF_XBOX_Y);
+                    append_text_if(device.buttons.Guide, text, CF_ICON_XBOX);
+                    ImGui::TextWrapped(text.c_str());
+                    ImGui::PopFont();
+                }
+
+                ImGui::EndTable();
+            }
+        }
+        ImGui::EndChild();
+        ImGui::EndDisabled();
+        ImGui::PopID();
+    }
+
+    ImGui::End();
+}
+
+void GD::XInput::Update()
 {
     if (!s_XInputGetStateEx)
     {
@@ -102,8 +287,7 @@ void XInput_Update()
     }
 }
 
-
-void XInput_EnumerateDevices()
+void GD::XInput::EnumerateDevices()
 {
     if (!s_XInputGetStateEx)
     {
@@ -139,7 +323,7 @@ void XInput_EnumerateDevices()
     }
 }
 
-void XInput_Poweroff(uint32_t XUser)
+static void XInput_Poweroff(DWORD XUser)
 {
     tXInputPowerOffController XInputPowerOffController = (tXInputPowerOffController)GetProcAddress(s_XInputInstance, (LPCSTR)103);
     if (!XInputPowerOffController)
@@ -172,8 +356,7 @@ void XInput_Poweroff(uint32_t XUser)
     }
 }
 
-
-void XInput_Init()
+void GD::XInput::Init()
 {
     // Load XInput library
     s_XInputInstance = LoadLibraryA("xinput1_4.dll");
@@ -205,12 +388,12 @@ void XInput_Init()
     if (!s_XInputGetStateEx || !s_XInputGetCapabilities)
     {
         GD_Log("Failed to get XInput function pointers\n");
-        XInput_Shutdown();
+        GD::XInput::Shutdown();
         return;
     }
 }
 
-void XInput_Shutdown()
+void GD::XInput::Shutdown()
 {
     if (s_XInputInstance)
     {

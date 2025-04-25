@@ -1,5 +1,5 @@
 
-namespace GD::XInput
+namespace GD::DInput
 {
     void RenderFrame();
 
