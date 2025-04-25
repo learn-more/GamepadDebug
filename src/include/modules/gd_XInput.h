@@ -3,7 +3,7 @@ namespace GD::XInput
 {
     void RenderFrame();
 
-    void Update();
+    void Update(double time);
     void EnumerateDevices();
     void Init();
     void Shutdown();

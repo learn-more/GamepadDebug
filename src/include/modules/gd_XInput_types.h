@@ -37,6 +37,8 @@ namespace GD
             uint16_t Y : 1;
             uint16_t Guide : 1;
             DPad DPad;
+            uint8_t LeftTrigger = 0;
+            uint8_t RightTrigger = 0;
 
             GamePadButtons()
             {
@@ -57,6 +59,8 @@ namespace GD
                 X = 0;
                 Y = 0;
                 Guide = 0;
+                LeftTrigger = 0;
+                RightTrigger = 0;
             }
         };
 
@@ -88,6 +92,18 @@ namespace GD
             }
         };
 
+        struct Battery
+        {
+            uint8_t Type = 0;
+            uint8_t Level = 0;
+
+            void clear()
+            {
+                Type = 0;
+                Level = 0;
+            }
+        };
+
         struct GamePadState
         {
             bool connected = false;
@@ -95,6 +111,7 @@ namespace GD
             string type;
             GamePadFeatures features;
             GamePadButtons buttons;
+            Battery battery;
 
             void clear()
             {
@@ -103,6 +120,7 @@ namespace GD
                 type.clear();
                 features.clear();
                 buttons.clear();
+                battery.clear();
             }
         };
 

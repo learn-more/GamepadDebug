@@ -34,6 +34,8 @@ typedef DWORD(WINAPI* tXInputPowerOffController)(DWORD XUser);
 static HINSTANCE s_XInputInstance = nullptr;
 static tXInputGetStateEx s_XInputGetStateEx = nullptr;
 static decltype(XInputGetCapabilities)* s_XInputGetCapabilities = nullptr;
+static decltype(XInputGetBatteryInformation)* s_XInputGetBatteryInformation = nullptr;
+static double s_LastBatteryUpdate = 0.0;
 
 
 static GD::XInput::GamePadState s_XInputDevices[4]{};
@@ -53,6 +55,19 @@ static const string SubTypeToString(BYTE subtype)
     case XINPUT_DEVSUBTYPE_DRUM_KIT: return "Drum Kit";
     case XINPUT_DEVSUBTYPE_ARCADE_STICK: return "Arcade Stick";
     default: return std::to_string(subtype);
+    }
+}
+
+static const string BatteryTypeToString(BYTE type)
+{
+    switch (type)
+    {
+    case BATTERY_TYPE_DISCONNECTED: return "Disconnected";
+    case BATTERY_TYPE_WIRED: return "Wired";
+    case BATTERY_TYPE_NIMH: return "NiMH";
+    case BATTERY_TYPE_ALKALINE: return "Alkaline";
+    case BATTERY_TYPE_UNKNOWN: return "Unknown";
+    default: return std::to_string(type);
     }
 }
 
@@ -231,6 +246,42 @@ void GD::XInput::RenderFrame()
                     ImGui::PopFont();
                 }
 
+
+                ImGui::TableNextColumn();
+                ImGui::Text("LTrigger");
+                ImGui::TableNextColumn();
+                char buf[32];
+                sprintf_s(buf, "%d", device.buttons.LeftTrigger);
+                ImGui::ProgressBar(device.buttons.LeftTrigger / 255.0f, ImVec2(-FLT_MIN, 0.f), buf);
+
+                ImGui::TableNextColumn();
+                ImGui::Text("RTrigger");
+                ImGui::TableNextColumn();
+                sprintf_s(buf, "%d", device.buttons.RightTrigger);
+                ImGui::ProgressBar(device.buttons.RightTrigger / 255.0f, ImVec2(-FLT_MIN, 0.f), buf);
+
+                ImGui::TableNextColumn();
+                ImGui::Text("Battery");
+                ImGui::TableNextColumn();
+                {
+                    std::string text = BatteryTypeToString(device.battery.Type);
+                    if (device.battery.Type != BATTERY_TYPE_UNKNOWN)
+                    {
+                        if (device.battery.Level == BATTERY_LEVEL_EMPTY)
+                            text += ", Empty";
+                        else if (device.battery.Level == BATTERY_LEVEL_LOW)
+                            text += ", Low";
+                        else if (device.battery.Level == BATTERY_LEVEL_MEDIUM)
+                            text += ", Medium";
+                        else if (device.battery.Level == BATTERY_LEVEL_FULL)
+                            text += ", Full";
+                        else
+                            text += ", Unknown: " + std::to_string(device.battery.Level);
+                    }
+
+                    ImGui::TextWrapped(text.c_str());
+                }
+
                 ImGui::EndTable();
             }
         }
@@ -242,12 +293,19 @@ void GD::XInput::RenderFrame()
     ImGui::End();
 }
 
-void GD::XInput::Update()
+void GD::XInput::Update(double time)
 {
     if (!s_XInputGetStateEx)
     {
         return;
     }
+    bool updateBattery = false;
+    if (s_LastBatteryUpdate == 0.0 || time >= s_LastBatteryUpdate)
+    {
+        s_LastBatteryUpdate = time + 30.0;
+        updateBattery = true;
+    }
+
 
     for (DWORD i = 0; i < XUSER_MAX_COUNT; ++i)
     {
@@ -276,6 +334,22 @@ void GD::XInput::Update()
                     btn.X = (state.Gamepad.wButtons & XINPUT_GAMEPAD_X) != 0;
                     btn.Y = (state.Gamepad.wButtons & XINPUT_GAMEPAD_Y) != 0;
                     btn.Guide = (state.Gamepad.wButtons & XINPUT_GAMEPAD_GUIDE) != 0;
+                    btn.LeftTrigger = state.Gamepad.bLeftTrigger;
+                    btn.RightTrigger = state.Gamepad.bRightTrigger;
+                }
+                if (updateBattery)
+                {
+                    XINPUT_BATTERY_INFORMATION batteryInfo{};
+                    DWORD res = s_XInputGetBatteryInformation(i, BATTERY_DEVTYPE_GAMEPAD, &batteryInfo);
+                    if (res == ERROR_SUCCESS)
+                    {
+                        s_XInputDevices[i].battery.Level = batteryInfo.BatteryLevel;
+                        s_XInputDevices[i].battery.Type = batteryInfo.BatteryType;
+                    }
+                    else
+                    {
+                        GD_Log("Failed to get battery information for controller %d\n", i);
+                    }
                 }
             }
             else
@@ -313,6 +387,7 @@ void GD::XInput::EnumerateDevices()
                 s_XInputDevices[i].features.wireless = (capabilities.Flags & XINPUT_CAPS_WIRELESS) != 0;
                 s_XInputDevices[i].features.noNavigation = (capabilities.Flags & XINPUT_CAPS_NO_NAVIGATION) != 0;
                 s_XInputDevices[i].features.plugInModules = (capabilities.Flags & XINPUT_CAPS_PMD_SUPPORTED) != 0;
+                s_LastBatteryUpdate = 0.0;
             }
             else
             {
@@ -384,8 +459,9 @@ void GD::XInput::Init()
         GD_Log("Falling back to public XInputGetState\n");
     }
     s_XInputGetCapabilities = (decltype(XInputGetCapabilities)*)GetProcAddress(s_XInputInstance, "XInputGetCapabilities");
+    s_XInputGetBatteryInformation = (decltype(XInputGetBatteryInformation)*)GetProcAddress(s_XInputInstance, "XInputGetBatteryInformation");
 
-    if (!s_XInputGetStateEx || !s_XInputGetCapabilities)
+    if (!s_XInputGetStateEx || !s_XInputGetCapabilities || !s_XInputGetBatteryInformation)
     {
         GD_Log("Failed to get XInput function pointers\n");
         GD::XInput::Shutdown();

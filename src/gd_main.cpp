@@ -15,7 +15,7 @@ void GD_Frame()
         GD::DInput::EnumerateDevices();
     }
 
-    GD::XInput::Update();
+    GD::XInput::Update(ImGui::GetTime());
     GD::DInput::Update();
 
 #if !defined(IMGUI_DISABLE_DEMO_WINDOWS)
