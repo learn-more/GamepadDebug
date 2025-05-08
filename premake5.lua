@@ -33,7 +33,7 @@ include "vendor"
 
 project "GamepadDebug"
     kind "WindowedApp"
-    files { "src/**.cpp", "src/**.h" }
+    files { "src/**.cpp", "src/**.h", "README.md" }
     includedirs { "src/include" }
     links { "d3d9", "Cfgmgr32" }
     add_imgui {}

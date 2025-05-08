@@ -23,6 +23,12 @@ namespace GD
             }
         };
 
+        struct Thumb
+        {
+            int16_t X = 0;
+            int16_t Y = 0;
+        };
+
         struct GamePadButtons
         {
             uint16_t Start : 1;
@@ -39,6 +45,9 @@ namespace GD
             DPad DPad;
             uint8_t LeftTrigger = 0;
             uint8_t RightTrigger = 0;
+
+            Thumb LeftThumbPos;
+            Thumb RightThumbPos;
 
             GamePadButtons()
             {
@@ -61,6 +70,10 @@ namespace GD
                 Guide = 0;
                 LeftTrigger = 0;
                 RightTrigger = 0;
+                LeftThumbPos.X = 0;
+                LeftThumbPos.Y = 0;
+                RightThumbPos.X = 0;
+                RightThumbPos.Y = 0;
             }
         };
 
@@ -104,11 +117,24 @@ namespace GD
             }
         };
 
+        struct DevInfo
+        {
+            uint16_t vendorId = 0;
+            uint16_t productId = 0;
+            uint16_t productVersion = 0;
+
+            bool any() const
+            {
+                return vendorId || productId || productVersion;
+            }
+        };
+
         struct GamePadState
         {
             bool connected = false;
             uint32_t session = 0;
             string type;
+            DevInfo devInfo;
             GamePadFeatures features;
             GamePadButtons buttons;
             Battery battery;
@@ -118,6 +144,7 @@ namespace GD
                 connected = false;
                 session = 0;
                 type.clear();
+                devInfo = {};
                 features.clear();
                 buttons.clear();
                 battery.clear();
