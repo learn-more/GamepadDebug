@@ -55,6 +55,7 @@ static tXInputGetCapabilitiesEx s_XInputGetCapabilitiesEx = nullptr;
 
 static decltype(XInputGetBatteryInformation)* s_XInputGetBatteryInformation = nullptr;
 static tXInputPowerOffController s_XInputPowerOffController = nullptr;
+static decltype(XInputSetState)* s_XInputSetState = nullptr;
 static tXInputEnable s_XInputEnable = nullptr;
 static bool s_fXInputIsEnabled = true;
 
@@ -65,6 +66,7 @@ static GD::XInput::GamePadState s_XInputDevices[4]{};
 
 static void XInput_Poweroff(DWORD XUser);
 static void XInput_EnableDisable(BOOL fEnable);
+static void XInput_SetRumble(DWORD XUser, WORD left, WORD right);
 
 static const string SubTypeToString(BYTE subtype)
 {
@@ -391,10 +393,8 @@ void GD::XInput::RenderFrame()
     }
     ImGui::PopClipRect();
 
-    if (ImGui::BeginPopup("XInput_Options"))
+    if (ImGui::BeginPopup("XInput_Options", ImGuiWindowFlags_NoMove))
     {
-        ImGui::Text("XInput Options");
-        ImGui::Separator();
         if (ImGui::Selectable("Enable XInput"))
             XInput_EnableDisable(TRUE);
         if (ImGui::Selectable("Disable XInput"))
@@ -456,12 +456,21 @@ void GD::XInput::RenderFrame()
                 {
                     ImGui::OpenPopup("XInput_Controller_Options");
                 }
-                if (ImGui::BeginPopup("XInput_Controller_Options"))
+                if (ImGui::BeginPopup("XInput_Controller_Options", ImGuiWindowFlags_NoMove))
                 {
-                    ImGui::Text("Controller Options");
-                    ImGui::Separator();
                     if (ImGui::Selectable("Power off"))
                         XInput_Poweroff(i);
+
+                    ImGui::Separator();
+                    if (ImGui::Selectable("Rumble left"))
+                        XInput_SetRumble(i, std::numeric_limits<WORD>::max(), 0);
+                    if (ImGui::Selectable("Rumble right"))
+                        XInput_SetRumble(i, 0, std::numeric_limits<WORD>::max());
+                    if (ImGui::Selectable("Rumble both"))
+                        XInput_SetRumble(i, std::numeric_limits<WORD>::max(), std::numeric_limits<WORD>::max());
+                    if (ImGui::Selectable("Stop rumble"))
+                        XInput_SetRumble(i, 0, 0);
+
                     ImGui::EndPopup();
                 }
 
@@ -557,7 +566,6 @@ void GD::XInput::RenderFrame()
                 {
                     ImGui::TableNextColumn();
                     ImGui::Text("Device");
-                    ImGui::SameLine();
                     ImGui::TextDisabled("(?)");
                     if (ImGui::BeginItemTooltip())
                     {
@@ -772,6 +780,29 @@ static void XInput_Poweroff(DWORD XUser)
     }
 }
 
+static void XInput_SetRumble(DWORD XUser, WORD left, WORD right)
+{
+    if (!s_XInputSetState)
+    {
+        GD_Log("Failed to get XInput SetState function\n");
+        return;
+    }
+
+    GD_Log("Rumbling controller %d: left %d, right %d\n", XUser, left, right);
+    XINPUT_VIBRATION vibration{};
+    vibration.wLeftMotorSpeed = left;
+    vibration.wRightMotorSpeed = right;
+    DWORD res = s_XInputSetState(XUser, &vibration);
+    if (res == ERROR_SUCCESS)
+    {
+        GD_Log("Rumble succeeded\n");
+    }
+    else
+    {
+        GD_Log("Rumble failed: ERROR %d\n", res);
+    }
+}
+
 void GD::XInput::Init()
 {
     // Load XInput library
@@ -805,6 +836,7 @@ void GD::XInput::Init()
 
     s_XInputPowerOffController = (tXInputPowerOffController)GetProcAddress(s_XInputInstance, (LPCSTR)103);
     s_XInputEnable = (tXInputEnable)GetProcAddress(s_XInputInstance, "XInputEnable");
+    s_XInputSetState = (decltype(XInputSetState)*)GetProcAddress(s_XInputInstance, "XInputSetState");
 
     if (!s_XInputGetStateEx || !s_XInputGetCapabilities || !s_XInputGetBatteryInformation)
     {
