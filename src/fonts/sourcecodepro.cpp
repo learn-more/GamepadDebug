@@ -1,3 +1,8 @@
+// PROJECT:     Gamepad Debug
+// LICENSE:     MIT (https://spdx.org/licenses/MIT.html)
+// PURPOSE:     Embedded Source Code Pro font for ImGui.
+// COPYRIGHT:   Copyright 2025 Mark Jansen <mark.jansen@reactos.org>
+
 #include "imgui.h"
 
 // Source Code Pro is a set of OpenType fonts that have been designed to work well in user interface (UI) environments.

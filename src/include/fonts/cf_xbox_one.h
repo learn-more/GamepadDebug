@@ -1,3 +1,8 @@
+// PROJECT:     Gamepad Debug
+// LICENSE:     MIT (https://spdx.org/licenses/MIT.html)
+// PURPOSE:     Application interface for the controller font.
+// COPYRIGHT:   Copyright 2025 Mark Jansen <mark.jansen@reactos.org>
+
 
 #define CF_XBOX_DPAD_UP "W"
 #define CF_XBOX_DPAD_DOWN "X"

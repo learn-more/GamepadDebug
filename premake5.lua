@@ -1,3 +1,8 @@
+-- PROJECT:     Gamepad Debug
+-- LICENSE:     MIT (https://spdx.org/licenses/MIT.html)
+-- PURPOSE:     main build script
+-- COPYRIGHT:   Copyright 2025 Mark Jansen <mark.jansen@reactos.org>
+
 
 include "scripts/actions.lua"
 
@@ -37,3 +42,10 @@ project "GamepadDebug"
     includedirs { "src/include" }
     links { "d3d9", "Cfgmgr32" }
     add_imgui {}
+
+local p = premake
+p.override(p.main, 'postAction', function(base)
+    base()
+    verbosef("Copying build/GamepadDebug.sln.licenseheader")
+    os.copyfile(".licenseheader", "build/GamepadDebug.sln.licenseheader")
+end)

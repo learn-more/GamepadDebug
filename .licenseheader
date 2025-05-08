@@ -1,11 +1,5 @@
+﻿extensions: .cs .cpp .h
 // PROJECT:     Gamepad Debug
 // LICENSE:     MIT (https://spdx.org/licenses/MIT.html)
-// PURPOSE:     Common windows headers
+// PURPOSE:     .
 // COPYRIGHT:   Copyright 2025 Mark Jansen <mark.jansen@reactos.org>
-
-
-#pragma once
-
-#include <SDKDDKVer.h>
-#include <windows.h>
-#include <strsafe.h>

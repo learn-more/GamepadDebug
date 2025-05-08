@@ -1,3 +1,8 @@
+// PROJECT:     Gamepad Debug
+// LICENSE:     MIT (https://spdx.org/licenses/MIT.html)
+// PURPOSE:     Handle & display device insertion / removal events
+// COPYRIGHT:   Copyright 2025 Mark Jansen <mark.jansen@reactos.org>
+
 #include "gd_win32.h"
 #include "gd_log.h"
 #include <cfgmgr32.h>

@@ -1,3 +1,8 @@
+// PROJECT:     Gamepad Debug
+// LICENSE:     MIT (https://spdx.org/licenses/MIT.html)
+// PURPOSE:     Embedded font for the Xbox controller glyphs.
+// COPYRIGHT:   Copyright 2025 Mark Jansen <mark.jansen@reactos.org>
+
 #include "imgui.h"
 
 // ***Controller Font*** is a series of [freeware](http://www.thealmightyguru.com/Wiki/index.php?title=Freeware) typefaces created by Dean Tersigni

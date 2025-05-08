@@ -1,3 +1,8 @@
+// PROJECT:     Gamepad Debug
+// LICENSE:     MIT (https://spdx.org/licenses/MIT.html)
+// PURPOSE:     Handle & display XInput devices
+// COPYRIGHT:   Copyright 2025 Mark Jansen <mark.jansen@reactos.org>
+
 #include "gd_win32.h"
 #include "gd_log.h"
 #include "fonts/cf_xbox_one.h"
@@ -51,6 +56,7 @@ static tXInputGetCapabilitiesEx s_XInputGetCapabilitiesEx = nullptr;
 static decltype(XInputGetBatteryInformation)* s_XInputGetBatteryInformation = nullptr;
 static tXInputPowerOffController s_XInputPowerOffController = nullptr;
 static tXInputEnable s_XInputEnable = nullptr;
+static bool s_fXInputIsEnabled = true;
 
 static double s_LastBatteryUpdate = 0.0;
 
@@ -366,9 +372,15 @@ void GD::XInput::RenderFrame()
     float pad_r = style.FramePadding.x;
     float button_sz = ImGui::GetFontSize();
 
+    if (!s_fXInputIsEnabled)
+        ImGui::PushStyleColor(ImGuiCol_TitleBgActive, ImVec4(0.50f, 0.18f, 0.17f, 1.00f));
+
     ImGui::PushStyleColor(ImGuiCol_TitleBg, ImGui::GetStyleColorVec4(ImGuiCol_TitleBgActive));
     ImGui::Begin("XInput devices", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBringToFrontOnFocus);
     ImGui::PopStyleColor();
+
+    if (!s_fXInputIsEnabled)
+        ImGui::PopStyleColor();
 
     auto title_bar_rect = ImGui::GetCurrentWindow()->TitleBarRect();
     ImVec2 collapse_button_pos = ImVec2(title_bar_rect.Max.x - pad_r - button_sz, title_bar_rect.Min.y + style.FramePadding.y);
@@ -723,6 +735,7 @@ static void XInput_EnableDisable(BOOL fEnable)
 
     GD_Log("XInput %s\n", fEnable ? "enabled" : "disabled");
     s_XInputEnable(fEnable);
+    s_fXInputIsEnabled = fEnable != FALSE;
 
     GD::XInput::EnumerateDevices();
 }

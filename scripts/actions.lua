@@ -1,3 +1,7 @@
+-- PROJECT:     Gamepad Debug
+-- LICENSE:     MIT (https://spdx.org/licenses/MIT.html)
+-- PURPOSE:     premake actions used in the CI
+-- COPYRIGHT:   Copyright 2025 Mark Jansen <mark.jansen@reactos.org>
 
 
 local function selected_platforms()

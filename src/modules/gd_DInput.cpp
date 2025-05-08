@@ -1,3 +1,8 @@
+// PROJECT:     Gamepad Debug
+// LICENSE:     MIT (https://spdx.org/licenses/MIT.html)
+// PURPOSE:     Handle & display DirectInput controllers
+// COPYRIGHT:   Copyright 2025 Mark Jansen <mark.jansen@reactos.org>
+
 #define INITGUID
 #define DIRECTINPUT_VERSION 0x0800
 #include "gd_win32.h"
@@ -6,7 +11,6 @@
 #include "imgui.h"
 #include "objbase.h"
 #include <dinput.h>
-#include <strsafe.h>
 #include <string>
 #include <vector>
 
