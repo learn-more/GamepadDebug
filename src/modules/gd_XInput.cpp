@@ -7,10 +7,12 @@
 #include "gd_log.h"
 #include "fonts/cf_xbox_one.h"
 #include "modules/gd_XInput.h"
-#include "modules/gd_XInput_types.h"
 #include <Xinput.h>
 #include "imgui.h"
 #include "imgui_internal.h"
+#include <string>
+
+using std::string;
 
 // Private (semi-) undocumented XInput functions
 // We want these to read the state of the Guide button (Xbox button) on the controller
@@ -61,8 +63,23 @@ static bool s_fXInputIsEnabled = true;
 
 static double s_LastBatteryUpdate = 0.0;
 
+struct XInputDevice
+{
+    bool connected = false;
 
-static GD::XInput::GamePadState s_XInputDevices[4]{};
+    DWORD dwPacketNumber = 0;
+    XINPUT_GAMEPAD_EX Gamepad{};
+    XINPUT_CAPABILITIES_EX Capabilities{};
+    XINPUT_BATTERY_INFORMATION BatteryInfo{};
+
+    const bool hasDeviceInfo() const
+    {
+        return Capabilities.vendorId != 0 || Capabilities.productId != 0 || Capabilities.productVersion != 0;
+    }
+};
+
+
+static XInputDevice s_XInputDevices[4]{};
 
 static void XInput_Poweroff(DWORD XUser);
 static void XInput_EnableDisable(BOOL fEnable);
@@ -232,7 +249,7 @@ static usbid_t usb_devs[] = {
 
 };
 
-std::string GetDeviceType(uint16_t vendorId, uint16_t productId)
+string GetDeviceType(uint16_t vendorId, uint16_t productId)
 {
     for (const auto& dev : usb_devs)
     {
@@ -244,7 +261,7 @@ std::string GetDeviceType(uint16_t vendorId, uint16_t productId)
     return "Unknown Device";
 }
 
-static void append_text_comma_if(bool show, std::string& output, const char* text)
+static void append_text_comma_if(bool show, string& output, const char* text)
 {
     if (show)
     {
@@ -252,48 +269,6 @@ static void append_text_comma_if(bool show, std::string& output, const char* tex
             output += ", ";
         output += text;
     }
-}
-
-static void append_text_if(bool show, std::string& output, const char* text)
-{
-    if (show)
-    {
-        output += text;
-    }
-}
-
-static void append_dpad(std::string& text, GD::XInput::DPad dpad)
-{
-    // First check for combinations that we can handle
-    if (dpad.Left && dpad.Up)
-    {
-        text += CF_XBOX_DPAD_UP_LEFT;
-        dpad.Left = 0;
-        dpad.Up = 0;
-    }
-    if (dpad.Left && dpad.Down)
-    {
-        text += CF_XBOX_DPAD_DOWN_LEFT;
-        dpad.Left = 0;
-        dpad.Down = 0;
-    }
-    if (dpad.Right && dpad.Up)
-    {
-        text += CF_XBOX_DPAD_UP_RIGHT;
-        dpad.Right = 0;
-        dpad.Up = 0;
-    }
-    if (dpad.Right && dpad.Down)
-    {
-        text += CF_XBOX_DPAD_DOWN_RIGHT;
-        dpad.Right = 0;
-        dpad.Down = 0;
-    }
-    // Now handle each direction individually
-    append_text_if(dpad.Up, text, CF_XBOX_DPAD_UP);
-    append_text_if(dpad.Down, text, CF_XBOX_DPAD_DOWN);
-    append_text_if(dpad.Left, text, CF_XBOX_DPAD_LEFT);
-    append_text_if(dpad.Right, text, CF_XBOX_DPAD_RIGHT);
 }
 
 static void ProgressBarEx(float fraction, const ImVec2& size_arg, const char* overlay)
@@ -331,18 +306,18 @@ static void ProgressBarEx(float fraction, const ImVec2& size_arg, const char* ov
     }
 }
 
-const char* analog_glyph(const GD::XInput::Thumb& thumb, float deadzone)
+const char* analog_glyph(SHORT sThumbX, SHORT sThumbY, float deadzone)
 {
 #ifndef M_PI
 #define M_PI       3.14159265358979323846
 #endif
 
-    float magnitude = sqrtf(thumb.X * (float)thumb.X + thumb.Y * (float)thumb.Y);
+    float magnitude = sqrtf(sThumbX * (float)sThumbX + sThumbY * (float)sThumbY);
     int xpos = 1;
     int ypos = 1;
     if (magnitude >= deadzone)
     {
-        float direction = atan2f(thumb.Y, thumb.X);
+        float direction = atan2f(sThumbY, sThumbX);
         if (direction < 0.0f)
             direction += 2.0f * (float)M_PI;
         float angle = direction * (180.0f / (float)M_PI);
@@ -427,24 +402,32 @@ void GD::XInput::RenderFrame()
                 ImGui::TableNextColumn();
                 ImGui::Text("XUser %d", i);
                 ImGui::TableNextColumn();
-                ImGui::Text(device.connected ? device.type.c_str() : "Disconnected");
+                ImGui::Text(device.connected ? SubTypeToString(device.Capabilities.Capabilities.SubType).c_str() : "Disconnected");
 
-                if (device.connected && device.features.any())
+                if (device.connected && device.Capabilities.Capabilities.Flags)
                 {
                     ImGui::SameLine();
                     ImGui::TextDisabled("(f)");
                     if (ImGui::BeginItemTooltip())
                     {
-                        if (device.features.voice)
-                            ImGui::BulletText("Device has an integrated voice device.");
-                        if (device.features.forceFeedback)
-                            ImGui::BulletText("Device supports force feedback functionality.");
-                        if (device.features.wireless)
-                            ImGui::BulletText("Device is wireless.");
-                        if (device.features.noNavigation)
-                            ImGui::BulletText("Device lacks menu navigation buttons (START, BACK, DPAD).");
-                        if (device.features.plugInModules)
-                            ImGui::BulletText("Device supports plug-in modules.");
+                        WORD Flags = device.Capabilities.Capabilities.Flags;
+
+                        auto include_if = [&Flags](WORD value, const char* text)
+                            {
+                                if (Flags & value)
+                                {
+                                    ImGui::BulletText(text);
+                                    Flags &= ~value;
+                                }
+                            };
+
+                        include_if(XINPUT_CAPS_VOICE_SUPPORTED, "Device has an integrated voice device.");
+                        include_if(XINPUT_CAPS_FFB_SUPPORTED, "Device supports force feedback functionality.");
+                        include_if(XINPUT_CAPS_WIRELESS, "Device is wireless.");
+                        include_if(XINPUT_CAPS_NO_NAVIGATION, "Device lacks menu navigation buttons (START, BACK, DPAD).");
+                        include_if(XINPUT_CAPS_PMD_SUPPORTED, "Device supports plug-in modules.");
+                        assert(Flags == 0 && "Unknown flags detected! Please report this.");
+
                         ImGui::EndTooltip();
                     }
                 }
@@ -480,19 +463,45 @@ void GD::XInput::RenderFrame()
                 ImGui::TableNextColumn();
                 {
                     ImGui::PushFont(io.Fonts->Fonts[1]);
-                    std::string text;
-                    append_dpad(text, device.buttons.DPad);
-                    append_text_if(device.buttons.Start, text, CF_XBOX_MENU);
-                    append_text_if(device.buttons.Back, text, CF_XBOX_VIEW);
-                    append_text_if(device.buttons.LeftThumb, text, CF_ANALOG_L);
-                    append_text_if(device.buttons.RightThumb, text, CF_ANALOG_R);
-                    append_text_if(device.buttons.LeftShoulder, text, CF_XBOX_LEFT_SHOULDER);
-                    append_text_if(device.buttons.RightShoulder, text, CF_XBOX_RIGHT_SHOULDER);
-                    append_text_if(device.buttons.A, text, CF_XBOX_A);
-                    append_text_if(device.buttons.B, text, CF_XBOX_B);
-                    append_text_if(device.buttons.X, text, CF_XBOX_X);
-                    append_text_if(device.buttons.Y, text, CF_XBOX_Y);
-                    append_text_if(device.buttons.Guide, text, CF_ICON_XBOX);
+                    string text;
+                    WORD wButtons = device.Gamepad.wButtons;
+
+                    static struct ButtonLookup {
+                        WORD button;
+                        const char* text;
+                    } buttons[] = {
+                        // Combinations should be before single buttons
+                        { XINPUT_GAMEPAD_DPAD_UP | XINPUT_GAMEPAD_DPAD_LEFT, CF_XBOX_DPAD_UP_LEFT },
+                        { XINPUT_GAMEPAD_DPAD_UP | XINPUT_GAMEPAD_DPAD_RIGHT, CF_XBOX_DPAD_UP_RIGHT },
+                        { XINPUT_GAMEPAD_DPAD_DOWN | XINPUT_GAMEPAD_DPAD_LEFT, CF_XBOX_DPAD_DOWN_LEFT },
+                        { XINPUT_GAMEPAD_DPAD_DOWN | XINPUT_GAMEPAD_DPAD_RIGHT, CF_XBOX_DPAD_DOWN_RIGHT },
+                        // Now that we handled the combinations, check if there are any 'single' keys left
+                        { XINPUT_GAMEPAD_DPAD_UP, CF_XBOX_DPAD_UP },
+                        { XINPUT_GAMEPAD_DPAD_DOWN, CF_XBOX_DPAD_DOWN },
+                        { XINPUT_GAMEPAD_DPAD_LEFT, CF_XBOX_DPAD_LEFT },
+                        { XINPUT_GAMEPAD_DPAD_RIGHT, CF_XBOX_DPAD_RIGHT },
+                        { XINPUT_GAMEPAD_START, CF_XBOX_MENU },
+                        { XINPUT_GAMEPAD_BACK, CF_XBOX_VIEW },
+                        { XINPUT_GAMEPAD_LEFT_THUMB, CF_ANALOG_L },
+                        { XINPUT_GAMEPAD_RIGHT_THUMB, CF_ANALOG_R },
+                        { XINPUT_GAMEPAD_LEFT_SHOULDER, CF_XBOX_LEFT_SHOULDER },
+                        { XINPUT_GAMEPAD_RIGHT_SHOULDER, CF_XBOX_RIGHT_SHOULDER },
+                        { XINPUT_GAMEPAD_A, CF_XBOX_A },
+                        { XINPUT_GAMEPAD_B, CF_XBOX_B },
+                        { XINPUT_GAMEPAD_X, CF_XBOX_X },
+                        { XINPUT_GAMEPAD_Y, CF_XBOX_Y },
+                        { XINPUT_GAMEPAD_GUIDE, CF_ICON_XBOX },
+                    };
+
+                    for (const auto& button : buttons)
+                    {
+                        if ((wButtons & button.button) == button.button)
+                        {
+                            text += button.text;
+                            wButtons &= ~button.button;
+                        }
+                    }
+
                     ImGui::TextWrapped(text.c_str());
                     ImGui::PopFont();
                 }
@@ -504,65 +513,65 @@ void GD::XInput::RenderFrame()
                 ImVec2 avail = ImGui::GetContentRegionAvail();
                 float height = ImGui::GetTextLineHeight();
                 char buf[32];
-                sprintf_s(buf, "%d", device.buttons.LeftTrigger);
-                ImGui::ProgressBar(device.buttons.LeftTrigger / 255.0f, ImVec2(avail.x / 2.f - style.FramePadding.x, 0.f), buf);
+                sprintf_s(buf, "%d", device.Gamepad.bLeftTrigger);
+                ImGui::ProgressBar(device.Gamepad.bLeftTrigger / 255.0f, ImVec2(avail.x / 2.f - style.FramePadding.x, 0.f), buf);
                 ImGui::SameLine();
-                sprintf_s(buf, "%d", device.buttons.RightTrigger);
-                ImGui::ProgressBar(device.buttons.RightTrigger / 255.0f, ImVec2(avail.x / 2.f - style.FramePadding.x, 0.f), buf);
+                sprintf_s(buf, "%d", device.Gamepad.bRightTrigger);
+                ImGui::ProgressBar(device.Gamepad.bRightTrigger / 255.0f, ImVec2(avail.x / 2.f - style.FramePadding.x, 0.f), buf);
 
 
                 ImGui::TableNextColumn();
                 ImGui::PushFont(io.Fonts->Fonts[1]);
                 ImGui::Text(CF_ANALOG_L);
-                auto gl = analog_glyph(device.buttons.LeftThumbPos, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
+                auto gl = analog_glyph(device.Gamepad.sThumbLX, device.Gamepad.sThumbLY, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
                 ImGui::SameLine();
                 ImGui::Text(gl);
                 ImGui::PopFont();
                 ImGui::TableNextColumn();
 
-                sprintf_s(buf, "X: %d", device.buttons.LeftThumbPos.X);
-                ProgressBarEx(device.buttons.LeftThumbPos.X / 32767.0f, ImVec2(avail.x / 2.f - style.FramePadding.x, 0.f), buf);
+                sprintf_s(buf, "X: %d", device.Gamepad.sThumbLX);
+                ProgressBarEx(device.Gamepad.sThumbLX / 32767.0f, ImVec2(avail.x / 2.f - style.FramePadding.x, 0.f), buf);
                 ImGui::SameLine();
-                sprintf_s(buf, "Y: %d", device.buttons.LeftThumbPos.Y);
-                ProgressBarEx(device.buttons.LeftThumbPos.Y / 32767.0f, ImVec2(avail.x / 2.f - style.FramePadding.x, 0.f), buf);
+                sprintf_s(buf, "Y: %d", device.Gamepad.sThumbLY);
+                ProgressBarEx(device.Gamepad.sThumbLY / 32767.0f, ImVec2(avail.x / 2.f - style.FramePadding.x, 0.f), buf);
 
                 ImGui::TableNextColumn();
                 ImGui::PushFont(io.Fonts->Fonts[1]);
                 ImGui::Text(CF_ANALOG_R);
-                gl = analog_glyph(device.buttons.RightThumbPos, XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE);
+                gl = analog_glyph(device.Gamepad.sThumbRX, device.Gamepad.sThumbRY, XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE);
                 ImGui::SameLine();
                 ImGui::Text(gl);
                 ImGui::PopFont();
                 ImGui::TableNextColumn();
-                sprintf_s(buf, "X: %d", device.buttons.RightThumbPos.X);
-                ProgressBarEx(device.buttons.RightThumbPos.X / 32767.0f, ImVec2(avail.x / 2.f - style.FramePadding.x, 0.f), buf);
+                sprintf_s(buf, "X: %d", device.Gamepad.sThumbRX);
+                ProgressBarEx(device.Gamepad.sThumbRX / 32767.0f, ImVec2(avail.x / 2.f - style.FramePadding.x, 0.f), buf);
                 ImGui::SameLine();
-                sprintf_s(buf, "Y: %d", device.buttons.RightThumbPos.Y);
-                ProgressBarEx(device.buttons.RightThumbPos.Y / 32767.0f, ImVec2(avail.x / 2.f - style.FramePadding.x, 0.f), buf);
+                sprintf_s(buf, "Y: %d", device.Gamepad.sThumbRY);
+                ProgressBarEx(device.Gamepad.sThumbRY / 32767.0f, ImVec2(avail.x / 2.f - style.FramePadding.x, 0.f), buf);
 
                 ImGui::TableNextColumn();
                 ImGui::Text("Battery");
                 ImGui::TableNextColumn();
                 {
-                    std::string text = BatteryTypeToString(device.battery.Type);
-                    if (device.battery.Type != BATTERY_TYPE_UNKNOWN)
+                    string text = BatteryTypeToString(device.BatteryInfo.BatteryType);
+                    if (device.BatteryInfo.BatteryType != BATTERY_TYPE_UNKNOWN)
                     {
-                        if (device.battery.Level == BATTERY_LEVEL_EMPTY)
+                        if (device.BatteryInfo.BatteryLevel == BATTERY_LEVEL_EMPTY)
                             text += ", Empty";
-                        else if (device.battery.Level == BATTERY_LEVEL_LOW)
+                        else if (device.BatteryInfo.BatteryLevel == BATTERY_LEVEL_LOW)
                             text += ", Low";
-                        else if (device.battery.Level == BATTERY_LEVEL_MEDIUM)
+                        else if (device.BatteryInfo.BatteryLevel == BATTERY_LEVEL_MEDIUM)
                             text += ", Medium";
-                        else if (device.battery.Level == BATTERY_LEVEL_FULL)
+                        else if (device.BatteryInfo.BatteryLevel == BATTERY_LEVEL_FULL)
                             text += ", Full";
                         else
-                            text += ", Unknown: " + std::to_string(device.battery.Level);
+                            text += ", Unknown: " + std::to_string(device.BatteryInfo.BatteryLevel);
                     }
 
                     ImGui::TextWrapped(text.c_str());
                 }
 
-                if (device.devInfo.any())
+                if (device.hasDeviceInfo())
                 {
                     ImGui::TableNextColumn();
                     ImGui::Text("Device");
@@ -574,22 +583,22 @@ void GD::XInput::RenderFrame()
                     }
 
                     ImGui::TableNextColumn();
-                    std::string text;
+                    string text;
 
                     text += "V:";
-                    sprintf_s(buf, "%04X", device.devInfo.vendorId);
+                    sprintf_s(buf, "%04X", device.Capabilities.vendorId);
                     text += buf;
 
                     text += ", P:";
-                    sprintf_s(buf, "%04X", device.devInfo.productId);
+                    sprintf_s(buf, "%04X", device.Capabilities.productId);
                     text += buf;
 
                     text += ", PV:";
-                    sprintf_s(buf, "%04X", device.devInfo.productVersion);
+                    sprintf_s(buf, "%04X", device.Capabilities.productVersion);
                     text += buf;
 
                     text += "\n";
-                    text += GetDeviceType(device.devInfo.vendorId, device.devInfo.productId);
+                    text += GetDeviceType(device.Capabilities.vendorId, device.Capabilities.productId);
 
                     ImGui::TextWrapped(text.c_str());
                 }
@@ -627,31 +636,10 @@ void GD::XInput::Update(double time)
             DWORD res = s_XInputGetStateEx(i, &state);
             if (res == ERROR_SUCCESS)
             {
-                if (state.dwPacketNumber != s_XInputDevices[i].session)
+                if (state.dwPacketNumber != s_XInputDevices[i].dwPacketNumber)
                 {
-                    s_XInputDevices[i].session = state.dwPacketNumber;
-                    auto& btn = s_XInputDevices[i].buttons;
-                    btn.DPad.Up = (state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_UP) != 0;
-                    btn.DPad.Down = (state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_DOWN) != 0;
-                    btn.DPad.Left = (state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_LEFT) != 0;
-                    btn.DPad.Right = (state.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_RIGHT) != 0;
-                    btn.Start = (state.Gamepad.wButtons & XINPUT_GAMEPAD_START) != 0;
-                    btn.Back = (state.Gamepad.wButtons & XINPUT_GAMEPAD_BACK) != 0;
-                    btn.LeftThumb = (state.Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_THUMB) != 0;
-                    btn.RightThumb = (state.Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_THUMB) != 0;
-                    btn.LeftShoulder = (state.Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER) != 0;
-                    btn.RightShoulder = (state.Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER) != 0;
-                    btn.A = (state.Gamepad.wButtons & XINPUT_GAMEPAD_A) != 0;
-                    btn.B = (state.Gamepad.wButtons & XINPUT_GAMEPAD_B) != 0;
-                    btn.X = (state.Gamepad.wButtons & XINPUT_GAMEPAD_X) != 0;
-                    btn.Y = (state.Gamepad.wButtons & XINPUT_GAMEPAD_Y) != 0;
-                    btn.Guide = (state.Gamepad.wButtons & XINPUT_GAMEPAD_GUIDE) != 0;
-                    btn.LeftTrigger = state.Gamepad.bLeftTrigger;
-                    btn.RightTrigger = state.Gamepad.bRightTrigger;
-                    btn.LeftThumbPos.X = state.Gamepad.sThumbLX;
-                    btn.LeftThumbPos.Y = state.Gamepad.sThumbLY;
-                    btn.RightThumbPos.X = state.Gamepad.sThumbRX;
-                    btn.RightThumbPos.Y = state.Gamepad.sThumbRY;
+                    s_XInputDevices[i].dwPacketNumber = state.dwPacketNumber;
+                    s_XInputDevices[i].Gamepad = state.Gamepad;
                 }
                 if (updateBattery)
                 {
@@ -659,8 +647,7 @@ void GD::XInput::Update(double time)
                     DWORD res = s_XInputGetBatteryInformation(i, BATTERY_DEVTYPE_GAMEPAD, &batteryInfo);
                     if (res == ERROR_SUCCESS)
                     {
-                        s_XInputDevices[i].battery.Level = batteryInfo.BatteryLevel;
-                        s_XInputDevices[i].battery.Type = batteryInfo.BatteryType;
+                        s_XInputDevices[i].BatteryInfo = batteryInfo;
                     }
                     else
                     {
@@ -671,7 +658,7 @@ void GD::XInput::Update(double time)
             else
             {
                 GD_Log("XInput controller %d is lost\n", i);
-                s_XInputDevices[i].clear();
+                s_XInputDevices[i] = {};
             }
         }
     }
@@ -687,47 +674,33 @@ void GD::XInput::EnumerateDevices()
     static_assert(_countof(s_XInputDevices) == XUSER_MAX_COUNT, "XInput devices array size mismatch");
     for (DWORD i = 0; i < XUSER_MAX_COUNT; ++i)
     {
-        XINPUT_CAPABILITIES capabilities{};
+        XINPUT_CAPABILITIES_EX capabilitiesEx{};
+        DWORD res;
+        if (s_XInputGetCapabilitiesEx)
+        {
+            res = s_XInputGetCapabilitiesEx(1, i, 0, &capabilitiesEx);
+        }
+        else
+        {
+            res = s_XInputGetCapabilities(i, XINPUT_FLAG_GAMEPAD, &capabilitiesEx.Capabilities);
+        }
 
-        DWORD res = s_XInputGetCapabilities(i, XINPUT_FLAG_GAMEPAD, &capabilities);
         bool isConnected = (res == ERROR_SUCCESS);
         if (isConnected != s_XInputDevices[i].connected)
         {
-            s_XInputDevices[i].connected = isConnected;
             if (isConnected)
             {
                 GD_Log("XInput controller %d is connected\n", i);
-                if (s_XInputGetCapabilitiesEx)
-                {
-                    XINPUT_CAPABILITIES_EX capabilitiesEx{};
-                    res = s_XInputGetCapabilitiesEx(1, i, 0, &capabilitiesEx);
-                    if (res == ERROR_SUCCESS)
-                    {
-                        ///* Fixup for Wireless Xbox 360 Controller */
-                        //if (capabilitiesEx.productId == 0 && capabilitiesEx.Capabilities.Flags & XINPUT_CAPS_WIRELESS)
-                        //{
-                        //    capabilitiesEx.vendorId = USB_VENDOR_MICROSOFT;
-                        //    capabilitiesEx.productId = USB_PRODUCT_XBOX360_XUSB_CONTROLLER;
-                        //}
-
-                        s_XInputDevices[i].devInfo.vendorId = capabilitiesEx.vendorId;
-                        s_XInputDevices[i].devInfo.productId = capabilitiesEx.productId;
-                        s_XInputDevices[i].devInfo.productVersion = capabilitiesEx.productVersion;
-
-                    }
-                }
-                s_XInputDevices[i].type = SubTypeToString(capabilities.SubType);
-                s_XInputDevices[i].features.voice = (capabilities.Flags & XINPUT_CAPS_VOICE_SUPPORTED) != 0;
-                s_XInputDevices[i].features.forceFeedback = (capabilities.Flags & XINPUT_CAPS_FFB_SUPPORTED) != 0;
-                s_XInputDevices[i].features.wireless = (capabilities.Flags & XINPUT_CAPS_WIRELESS) != 0;
-                s_XInputDevices[i].features.noNavigation = (capabilities.Flags & XINPUT_CAPS_NO_NAVIGATION) != 0;
-                s_XInputDevices[i].features.plugInModules = (capabilities.Flags & XINPUT_CAPS_PMD_SUPPORTED) != 0;
-                s_LastBatteryUpdate = 0.0;
+                s_XInputDevices[i].connected = true;
+                s_XInputDevices[i].Capabilities = capabilitiesEx;
+                s_XInputDevices[i].Gamepad = {};
+                s_XInputDevices[i].dwPacketNumber = 0;
+                s_XInputDevices[i].BatteryInfo = {};
             }
             else
             {
                 GD_Log("XInput controller %d is disconnected\n", i);
-                s_XInputDevices[i].clear();
+                s_XInputDevices[i] = {};
             }
         }
     }
